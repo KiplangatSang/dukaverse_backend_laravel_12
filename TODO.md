@@ -1,0 +1,2 @@
+- [x] Change security annotation in unlinkSocialAccount method from security={{"sanctum":{}}} to security={{"Bearer":{}}}
+- [x] Change security annotation in getLinkedAccounts method from security={{"sanctum":{}}} to security={{"Bearer":{}}}
