@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Job;
 use App\Models\JobApplication;
+use App\Models\Calendar;
+use App\Models\Task;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -418,9 +420,17 @@ class JobController extends BaseController
             return $this->sendError("Validation failed", $validator->errors());
         }
 
-        $application->updateStatus($request->status, Auth::id(), $request->notes);
+        $oldStatus = $application->status;
+        $newStatus = $request->status;
 
-        return $this->sendResponse(["application" => $application], "Application status updated successfully.");
+        $application->updateStatus($newStatus, Auth::id(), $request->notes);
+
+        // If status changed to 'interviewed', create calendar event and task
+        if ($oldStatus !== 'interviewed' && $newStatus === 'interviewed') {
+            $this->createInterviewCalendarAndTask($application);
+        }
+
+        return $this->sendResponse(["application" => $application->load(['calendar', 'task'])], "Application status updated successfully.");
     }
 
     /**
@@ -458,5 +468,132 @@ class JobController extends BaseController
             ->get();
 
         return $this->sendResponse(["applications" => $applications], "Your applications retrieved successfully.");
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/v1/jobs/applications/{application}/select-interview-date",
+     *     tags={"Jobs"},
+     *     summary="Select interview date for job application (applicant only)",
+     *     security={{"Bearer":{}}},
+     *     @OA\Parameter(name="application", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"start_time","end_time"},
+     *             @OA\Property(property="start_time", type="string", format="date-time", example="2025-09-22T10:00:00Z"),
+     *             @OA\Property(property="end_time", type="string", format="date-time", example="2025-09-22T11:00:00Z"),
+     *             @OA\Property(property="location", type="string", nullable=true),
+     *             @OA\Property(property="meeting_link", type="string", format="url", nullable=true)
+     *         )
+     *     ),
+     *     @OA\Response(response=200, description="Interview date selected successfully"),
+     *     @OA\Response(response=403, description="Unauthorized"),
+     *     @OA\Response(response=404, description="Application not found"),
+     *     @OA\Response(response=400, description="Application not eligible for interview scheduling")
+     * )
+     */
+    public function selectInterviewDate(Request $request, JobApplication $application)
+    {
+        if ($application->applicant_id !== Auth::id()) {
+            return $this->sendError("Unauthorized", ["error" => "You can only select interview dates for your own applications."], 403);
+        }
+
+        if ($application->status !== 'interviewed') {
+            return $this->sendError("Bad request", ["error" => "This application is not eligible for interview scheduling."], 400);
+        }
+
+        if (!$application->calendar_id) {
+            return $this->sendError("Bad request", ["error" => "No calendar event found for this application."], 400);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'start_time' => 'required|date|after:now',
+            'end_time' => 'required|date|after:start_time',
+            'location' => 'nullable|string',
+            'meeting_link' => 'nullable|url',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError("Validation failed", $validator->errors());
+        }
+
+        $calendar = $application->calendar;
+
+        // Check for conflicts with existing calendar events for the interviewer (job poster)
+        $conflicts = Calendar::where('user_id', $application->job->posted_by)
+            ->where('id', '!=', $calendar->id)
+            ->where(function ($query) use ($request) {
+                $query->whereBetween('start_time', [$request->start_time, $request->end_time])
+                    ->orWhereBetween('end_time', [$request->start_time, $request->end_time])
+                    ->orWhere(function ($q) use ($request) {
+                        $q->where('start_time', '<=', $request->start_time)
+                            ->where('end_time', '>=', $request->end_time);
+                    });
+            })
+            ->where('status', 'scheduled')
+            ->get();
+
+        if ($conflicts->count() > 0) {
+            return $this->sendError("Time conflict", [
+                "error" => "The selected time conflicts with existing scheduled events.",
+                "conflicts" => $conflicts->map(function ($conflict) {
+                    return [
+                        'id' => $conflict->id,
+                        'title' => $conflict->title,
+                        'start_time' => $conflict->start_time,
+                        'end_time' => $conflict->end_time,
+                    ];
+                })
+            ], 409);
+        }
+
+        $calendar->update([
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+            'location' => $request->location,
+            'meeting_link' => $request->meeting_link,
+        ]);
+
+        return $this->sendResponse(["application" => $application->load(['calendar', 'task'])], "Interview date selected successfully.");
+    }
+
+    /**
+     * Create calendar event and task for interview
+     */
+    private function createInterviewCalendarAndTask(JobApplication $application)
+    {
+        // Create task for interview preparation
+        $task = Task::create([
+            'title' => "Interview: {$application->job->title} - {$application->applicant->name}",
+            'description' => "Conduct interview for {$application->applicant->name} applying for {$application->job->title}",
+            'user_id' => $application->job->posted_by,
+            'taskable_type' => Job::class,
+            'taskable_id' => $application->job_id,
+            'status' => Task::NOT_STARTED,
+            'priority' => 'high',
+        ]);
+
+        // Assign task to job poster (initially)
+        $task->assignees()->attach($application->job->posted_by);
+
+        // Create calendar event
+        $calendar = Calendar::create([
+            'title' => "Interview: {$application->job->title}",
+            'description' => "Interview with {$application->applicant->name} for {$application->job->title}",
+            'user_id' => $application->job->posted_by,
+            'task_id' => $task->id,
+            'start_time' => now()->addDays(7), // Default to 1 week from now
+            'end_time' => now()->addDays(7)->addHour(),
+            'category' => 'meeting',
+            'priority' => 'high',
+            'status' => 'scheduled',
+        ]);
+
+        // Update application with calendar and task IDs
+        $application->update([
+            'calendar_id' => $calendar->id,
+            'task_id' => $task->id,
+        ]);
     }
 }

@@ -503,6 +503,327 @@ class CalendarController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/v1/calendars/create-from-task/{task_id}",
+     *     operationId="createCalendarFromTask",
+     *     tags={"Calendar"},
+     *     security={{"bearerAuth":{}}},
+     *     summary="Create a calendar event from an existing task",
+     *     @OA\Parameter(
+     *         name="task_id",
+     *         in="path",
+     *         required=true,
+     *         description="ID of the task",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"start_time", "end_time"},
+     *             @OA\Property(property="start_time", type="string", format="date-time", example="2025-09-22T10:00:00Z"),
+     *             @OA\Property(property="end_time", type="string", format="date-time", example="2025-09-22T11:00:00Z"),
+     *             @OA\Property(property="location", type="string", example="Office"),
+     *             @OA\Property(property="meeting_link", type="string", format="url", example="https://zoom.us/j/123456789"),
+     *             @OA\Property(property="reminder_minutes_before", type="integer", example=15)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Calendar event created from task successfully",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object"),
+     *             @OA\Property(property="message", type="string", example="Calendar event created from task successfully")
+     *         )
+     *     )
+     * )
+     */
+    public function createFromTask(Request $request, Task $task)
+    {
+        // Check if user has access to this task
+        if (!$task->assignees()->where('assignee_id', Auth::id())->exists() && $task->user_id !== Auth::id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized to create calendar event for this task',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'start_time' => 'required|date',
+            'end_time' => 'nullable|date|after:start_time',
+            'location' => 'nullable|string',
+            'meeting_link' => 'nullable|url',
+            'reminder_minutes_before' => 'nullable|integer|min:0',
+            'attendees' => 'nullable|array',
+            'attendees.*' => 'exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Check for conflicts
+        $conflicts = Calendar::where('user_id', Auth::id())
+            ->where(function ($query) use ($request) {
+                $query->whereBetween('start_time', [$request->start_time, $request->end_time])
+                    ->orWhereBetween('end_time', [$request->start_time, $request->end_time])
+                    ->orWhere(function ($q) use ($request) {
+                        $q->where('start_time', '<=', $request->start_time)
+                            ->where('end_time', '>=', $request->end_time);
+                    });
+            })
+            ->where('status', 'scheduled')
+            ->get();
+
+        if ($conflicts->count() > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Time conflict detected',
+                'errors' => [
+                    'conflicts' => $conflicts->map(function ($conflict) {
+                        return [
+                            'id' => $conflict->id,
+                            'title' => $conflict->title,
+                            'start_time' => $conflict->start_time,
+                            'end_time' => $conflict->end_time,
+                        ];
+                    })
+                ]
+            ], 409);
+        }
+
+        // Create calendar event
+        $event = Calendar::create([
+            'title' => $task->title,
+            'description' => $task->description,
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+            'user_id' => Auth::id(),
+            'task_id' => $task->id,
+            'location' => $request->location,
+            'meeting_link' => $request->meeting_link,
+            'priority' => $this->mapTaskPriorityToCalendar($task->priority ?? 'medium'),
+            'category' => 'task',
+            'reminder_minutes_before' => $request->reminder_minutes_before ?? 15,
+            'status' => 'scheduled',
+        ]);
+
+        // Attach task assignees as attendees
+        $attendees = $task->assignees()->pluck('assignee_id')->toArray();
+        if ($request->filled('attendees')) {
+            $attendees = array_unique(array_merge($attendees, $request->attendees));
+        }
+
+        if (!empty($attendees)) {
+            $event->attendees()->attach($attendees, [
+                'role' => 'attendee',
+                'status' => 'pending',
+                'notify_reminders' => true,
+                'notify_updates' => true,
+            ]);
+        }
+
+        // Create reminder notification
+        if ($event->reminder_minutes_before > 0) {
+            CalendarNotification::create([
+                'calendar_id' => $event->id,
+                'user_id' => $event->user_id,
+                'type' => 'reminder',
+                'title' => "Reminder: {$event->title}",
+                'message' => "You have an upcoming task event: {$event->title}",
+                'channel' => 'in_app',
+                'priority' => $event->priority ?? 'medium',
+                'scheduled_at' => $event->start_time->copy()->subMinutes($event->reminder_minutes_before),
+                'metadata' => ['event_id' => $event->id, 'task_id' => $task->id],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $event->load(['task', 'attendees', 'user']),
+            'message' => 'Calendar event created from task successfully',
+        ], 201);
+    }
+
+    /**
+     * @OA\Put(
+     *     path="/api/v1/calendars/{calendar}/reschedule",
+     *     operationId="rescheduleCalendarEvent",
+     *     tags={"Calendar"},
+     *     security={{"bearerAuth":{}}},
+     *     summary="Reschedule a calendar event (drag-and-drop functionality)",
+     *     @OA\Parameter(
+     *         name="calendar",
+     *         in="path",
+     *         required=true,
+     *         description="ID of the calendar event",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"start_time", "end_time"},
+     *             @OA\Property(property="start_time", type="string", format="date-time", example="2025-09-22T14:00:00Z"),
+     *             @OA\Property(property="end_time", type="string", format="date-time", example="2025-09-22T15:00:00Z")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Calendar event rescheduled successfully",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object"),
+     *             @OA\Property(property="message", type="string", example="Calendar event rescheduled successfully")
+     *         )
+     *     )
+     * )
+     */
+    public function reschedule(Request $request, Calendar $calendar)
+    {
+        if ($calendar->user_id !== Auth::id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized to reschedule this calendar event',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'start_time' => 'required|date',
+            'end_time' => 'nullable|date|after:start_time',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Check for conflicts (excluding current event)
+        $conflicts = Calendar::where('user_id', Auth::id())
+            ->where('id', '!=', $calendar->id)
+            ->where(function ($query) use ($request) {
+                $query->whereBetween('start_time', [$request->start_time, $request->end_time])
+                    ->orWhereBetween('end_time', [$request->start_time, $request->end_time])
+                    ->orWhere(function ($q) use ($request) {
+                        $q->where('start_time', '<=', $request->start_time)
+                            ->where('end_time', '>=', $request->end_time);
+                    });
+            })
+            ->where('status', 'scheduled')
+            ->get();
+
+        if ($conflicts->count() > 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Time conflict detected',
+                'errors' => [
+                    'conflicts' => $conflicts->map(function ($conflict) {
+                        return [
+                            'id' => $conflict->id,
+                            'title' => $conflict->title,
+                            'start_time' => $conflict->start_time,
+                            'end_time' => $conflict->end_time,
+                        ];
+                    })
+                ]
+            ], 409);
+        }
+
+        $calendar->update([
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+        ]);
+
+        // Update reminder notifications
+        if ($calendar->reminder_minutes_before > 0) {
+            CalendarNotification::where('calendar_id', $calendar->id)
+                ->where('type', 'reminder')
+                ->update([
+                    'scheduled_at' => $calendar->start_time->copy()->subMinutes($calendar->reminder_minutes_before)
+                ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $calendar->load(['task', 'attendees', 'user']),
+            'message' => 'Calendar event rescheduled successfully',
+        ]);
+    }
+
+    /**
+     * @OA\Put(
+     *     path="/api/v1/calendars/{calendar}/resize",
+     *     operationId="resizeCalendarEvent",
+     *     tags={"Calendar"},
+     *     security={{"bearerAuth":{}}},
+     *     summary="Resize a calendar event duration (drag-and-drop functionality)",
+     *     @OA\Parameter(
+     *         name="calendar",
+     *         in="path",
+     *         required=true,
+     *         description="ID of the calendar event",
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"end_time"},
+     *             @OA\Property(property="end_time", type="string", format="date-time", example="2025-09-22T12:00:00Z")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Calendar event resized successfully",
+     *         @OA\JsonContent(
+     *             type="object",
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="data", type="object"),
+     *             @OA\Property(property="message", type="string", example="Calendar event resized successfully")
+     *         )
+     *     )
+     * )
+     */
+    public function resize(Request $request, Calendar $calendar)
+    {
+        if ($calendar->user_id !== Auth::id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized to resize this calendar event',
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'end_time' => 'required|date|after:' . $calendar->start_time,
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $calendar->update([
+            'end_time' => $request->end_time,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $calendar->load(['task', 'attendees', 'user']),
+            'message' => 'Calendar event resized successfully',
+        ]);
+    }
+
     // Helper Methods
     private function mapTaskPriorityToCalendar($taskPriority)
     {

@@ -19,6 +19,8 @@ class JobApplication extends Model
         'notes',
         'reviewed_at',
         'reviewed_by',
+        'calendar_id',
+        'task_id',
     ];
 
     protected $casts = [
@@ -59,6 +61,22 @@ class JobApplication extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /**
+     * Get the calendar event for this application
+     */
+    public function calendar(): BelongsTo
+    {
+        return $this->belongsTo(Calendar::class);
+    }
+
+    /**
+     * Get the task for this application
+     */
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
     }
 
     /**

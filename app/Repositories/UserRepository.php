@@ -4,15 +4,15 @@ namespace App\Repositories;
 use App\Helpers\Accounts\Account;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class UserRepository
 {
     private $account;
     private $user;
-    public function __construct($account, $user = null)
+    public function __construct($user = null)
     {
-        $this->account = $account;
 
         if (! $user) {
             $this->user = User::where('id', Auth::id())->first();
@@ -25,6 +25,7 @@ class UserRepository
     {
 
         $account = new Account($this->user);
+        $this->account = $account;
         $users   = $account->members();
 
         return $users;

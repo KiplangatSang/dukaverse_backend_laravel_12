@@ -103,6 +103,12 @@ This document outlines the professional implementation of the Dukaverse Calendar
 - `POST /api/v1/calendars/from-task/{task_id}` - Create event from task
 - `PUT /api/v1/calendars/{id}/sync-task` - Sync with linked task
 
+### Job Application Integration
+- `POST /api/v1/jobs/applications/{application}/select-interview-date` - Select interview date (applicant)
+- Automatic calendar event creation when job application status becomes 'interviewed'
+- Automatic task creation for interview preparation
+- Conflict detection for interview scheduling
+
 ### Drag-and-Drop
 - `PUT /api/v1/calendars/{id}/reschedule` - Update time/date
 - `PUT /api/v1/calendars/{id}/resize` - Update duration
@@ -147,6 +153,36 @@ This document outlines the professional implementation of the Dukaverse Calendar
 }
 ```
 
+### Job Application Integration Example
+```json
+{
+  "application_id": 1,
+  "calendar_event": {
+    "id": 10,
+    "title": "Interview: Senior Laravel Developer",
+    "description": "Interview with John Doe for Senior Laravel Developer position",
+    "start_time": "2025-09-22T10:00:00Z",
+    "end_time": "2025-09-22T11:00:00Z",
+    "priority": "high",
+    "category": "meeting",
+    "task_id": 5,
+    "user_id": 2,
+    "location": "Zoom Meeting Room",
+    "meeting_link": "https://zoom.us/j/123456789",
+    "status": "scheduled"
+  },
+  "interview_task": {
+    "id": 5,
+    "title": "Interview: Senior Laravel Developer - John Doe",
+    "description": "Conduct interview for John Doe applying for Senior Laravel Developer",
+    "user_id": 2,
+    "status": "pending",
+    "priority": "high",
+    "assignees": [2]
+  }
+}
+```
+
 ### Task Integration
 ```json
 {
@@ -163,6 +199,8 @@ This document outlines the professional implementation of the Dukaverse Calendar
 - Data validation for all inputs
 - Rate limiting for bulk operations
 - Audit logging for changes
+- Conflict detection for interview scheduling
+- Authorization checks for job application calendar access
 
 ## Performance Optimizations
 - Database indexing on frequently queried fields
@@ -177,6 +215,8 @@ This document outlines the professional implementation of the Dukaverse Calendar
 - Integration tests for task sync
 - Performance tests for bulk operations
 - Browser tests for drag-and-drop functionality
+- Conflict detection tests for interview scheduling
+- Job application calendar integration tests
 
 ## Deployment Plan
 1. Database migration deployment

@@ -113,6 +113,66 @@ PUT /api/v1/jobs/applications/{application}/status
 }
 ```
 
+#### Select Interview Date (Applicant Only)
+```
+POST /api/v1/jobs/applications/{application}/select-interview-date
+```
+**Request Body:**
+```json
+{
+  "start_time": "2025-09-22T10:00:00Z",
+  "end_time": "2025-09-22T11:00:00Z",
+  "location": "Zoom Meeting Room",
+  "meeting_link": "https://zoom.us/j/123456789"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "application": {
+      "id": 1,
+      "status": "interviewed",
+      "calendar": {
+        "id": 10,
+        "title": "Interview: Senior Laravel Developer",
+        "start_time": "2025-09-22T10:00:00Z",
+        "end_time": "2025-09-22T11:00:00Z",
+        "location": "Zoom Meeting Room",
+        "meeting_link": "https://zoom.us/j/123456789"
+      },
+      "task": {
+        "id": 5,
+        "title": "Interview: Senior Laravel Developer - John Doe",
+        "status": "pending"
+      }
+    }
+  },
+  "message": "Interview date selected successfully"
+}
+```
+
+**Error Response (Time Conflict):**
+```json
+{
+  "success": false,
+  "message": "Time conflict",
+  "errors": {
+    "error": "The selected time conflicts with existing scheduled events.",
+    "conflicts": [
+      {
+        "id": 15,
+        "title": "Team Standup",
+        "start_time": "2025-09-22T09:30:00Z",
+        "end_time": "2025-09-22T10:30:00Z"
+      }
+    ]
+  }
+}
+```
+
 ## Application Status Flow
 
 1. **pending** - Initial application status

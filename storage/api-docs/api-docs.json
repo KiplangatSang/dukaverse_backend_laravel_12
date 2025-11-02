@@ -1686,6 +1686,241 @@
                 ]
             }
         },
+        "/api/v1/calendars/create-from-task/{task_id}": {
+            "post": {
+                "tags": [
+                    "Calendar"
+                ],
+                "summary": "Create a calendar event from an existing task",
+                "operationId": "createCalendarFromTask",
+                "parameters": [
+                    {
+                        "name": "task_id",
+                        "in": "path",
+                        "description": "ID of the task",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "start_time",
+                                    "end_time"
+                                ],
+                                "properties": {
+                                    "start_time": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-09-22T10:00:00Z"
+                                    },
+                                    "end_time": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-09-22T11:00:00Z"
+                                    },
+                                    "location": {
+                                        "type": "string",
+                                        "example": "Office"
+                                    },
+                                    "meeting_link": {
+                                        "type": "string",
+                                        "format": "url",
+                                        "example": "https://zoom.us/j/123456789"
+                                    },
+                                    "reminder_minutes_before": {
+                                        "type": "integer",
+                                        "example": 15
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Calendar event created from task successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Calendar event created from task successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/calendars/{calendar}/reschedule": {
+            "put": {
+                "tags": [
+                    "Calendar"
+                ],
+                "summary": "Reschedule a calendar event (drag-and-drop functionality)",
+                "operationId": "rescheduleCalendarEvent",
+                "parameters": [
+                    {
+                        "name": "calendar",
+                        "in": "path",
+                        "description": "ID of the calendar event",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "start_time",
+                                    "end_time"
+                                ],
+                                "properties": {
+                                    "start_time": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-09-22T14:00:00Z"
+                                    },
+                                    "end_time": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-09-22T15:00:00Z"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Calendar event rescheduled successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Calendar event rescheduled successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/calendars/{calendar}/resize": {
+            "put": {
+                "tags": [
+                    "Calendar"
+                ],
+                "summary": "Resize a calendar event duration (drag-and-drop functionality)",
+                "operationId": "resizeCalendarEvent",
+                "parameters": [
+                    {
+                        "name": "calendar",
+                        "in": "path",
+                        "description": "ID of the calendar event",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "end_time"
+                                ],
+                                "properties": {
+                                    "end_time": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-09-22T12:00:00Z"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Calendar event resized successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Calendar event resized successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/v1/campaigns": {
             "get": {
                 "tags": [
@@ -4607,14 +4842,14 @@
                 ]
             }
         },
-        "/api/v1/analytics/permissions": {
+        "/api/v1/user/permissions": {
             "get": {
                 "tags": [
                     "Analytics"
                 ],
                 "summary": "Get permissions",
                 "description": "Fetch analytics-related permissions",
-                "operationId": "07432059c1750cd6bdd023ac76622228",
+                "operationId": "4f23f622eaa53438657f494fc975af58",
                 "responses": {
                     "200": {
                         "description": "Permissions fetched successfully",
@@ -4644,14 +4879,14 @@
                 ]
             }
         },
-        "/api/v1/auth/user": {
+        "/api/v1/auth/user/data": {
             "get": {
                 "tags": [
                     "Analytics"
                 ],
                 "summary": "Get analytics for a user",
                 "description": "Fetch user-specific analytics data",
-                "operationId": "19e0f521dd6be66a91e7951a05f46465",
+                "operationId": "4fe6df858db6ff532ab8d31e2eb24cdd",
                 "responses": {
                     "200": {
                         "description": "User data fetched successfully",
@@ -5500,6 +5735,79 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/jobs/applications/{application}/select-interview-date": {
+            "post": {
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Select interview date for job application (applicant only)",
+                "operationId": "a0bb0669374eeeceaa52b67d62dfb183",
+                "parameters": [
+                    {
+                        "name": "application",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "start_time",
+                                    "end_time"
+                                ],
+                                "properties": {
+                                    "start_time": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-09-22T10:00:00Z"
+                                    },
+                                    "end_time": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2025-09-22T11:00:00Z"
+                                    },
+                                    "location": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "meeting_link": {
+                                        "type": "string",
+                                        "format": "url",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Interview date selected successfully"
+                    },
+                    "403": {
+                        "description": "Unauthorized"
+                    },
+                    "404": {
+                        "description": "Application not found"
+                    },
+                    "400": {
+                        "description": "Application not eligible for interview scheduling"
                     }
                 },
                 "security": [

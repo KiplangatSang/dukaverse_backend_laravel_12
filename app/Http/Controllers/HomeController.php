@@ -11,6 +11,7 @@ class HomeController extends BaseController
 {
     public function __construct(
         private readonly AuthService $authService,
+       private readonly AnalyticsService $analyticsService,
         ApiResource $apiResource
     ) {
         parent::__construct($apiResource);
@@ -37,8 +38,7 @@ class HomeController extends BaseController
      */
     public function dashboard(): JsonResponse
     {
-        $analyticsService = app(AnalyticsService::class);
-        $data = $analyticsService->index();
+         $data = $this->analyticsService->index();
         if (isset($data['error'])) {
             return $this->apiResource->error($data['error'], 400);
         }
@@ -47,7 +47,7 @@ class HomeController extends BaseController
 
     /**
      * @OA\Get(
-     *     path="/api/v1/analytics/permissions",
+     *     path="/api/v1/user/permissions",
      *     tags={"Analytics"},
      *     security={{"bearerAuth":{}}},
      *     summary="Get permissions",
@@ -65,8 +65,7 @@ class HomeController extends BaseController
     public function permissions(): JsonResponse
     {
         try {
-            $analyticsService = app(AnalyticsService::class);
-            $result = $analyticsService->permissions();
+             $result = $this->analyticsService->permissions();
             if (isset($result['error'])) {
                 return $this->apiResource->error($result['error'], 400);
             }
@@ -78,7 +77,7 @@ class HomeController extends BaseController
 
     /**
      * @OA\Get(
-     *     path="/api/v1/auth/user",
+     *     path="/api/v1/auth/user/data",
      *     tags={"Analytics"},
      *     security={{"bearerAuth":{}}},
      *     summary="Get analytics for a user",
@@ -96,8 +95,7 @@ class HomeController extends BaseController
     public function user(): JsonResponse
     {
         try {
-            $analyticsService = app(AnalyticsService::class);
-            $data = $analyticsService->showUser();
+             $data = $this->analyticsService->showUser();
             if (isset($data['error'])) {
                 return $this->apiResource->error($data['error'], 400);
             }
@@ -126,8 +124,7 @@ class HomeController extends BaseController
     public function dashboardAnalytics(): JsonResponse
     {
         try {
-            $analyticsService = app(AnalyticsService::class);
-            $data = $analyticsService->dashboardAnalytics();
+             $data = $this->analyticsService->dashboardAnalytics();
             if (isset($data['error'])) {
                 return $this->apiResource->error($data['error'], 400);
             }
@@ -156,8 +153,7 @@ class HomeController extends BaseController
     public function dashboardProjects(): JsonResponse
     {
         try {
-            $analyticsService = app(AnalyticsService::class);
-            $data = $analyticsService->dashboardProjects();
+             $data = $this->analyticsService->dashboardProjects();
             if (isset($data['error'])) {
                 return $this->apiResource->error($data['error'], 400);
             }
@@ -186,8 +182,7 @@ class HomeController extends BaseController
     public function dashboarEcommerce(): JsonResponse
     {
         try {
-            $analyticsService = app(AnalyticsService::class);
-            $data = $analyticsService->dashboarEcommerce();
+             $data = $this->analyticsService->dashboarEcommerce();
             if (isset($data['error'])) {
                 return $this->apiResource->error($data['error'], 400);
             }
@@ -216,8 +211,7 @@ class HomeController extends BaseController
     public function dashboadWallet(): JsonResponse
     {
         try {
-            $analyticsService = app(AnalyticsService::class);
-            $data = $analyticsService->dashboadWallet();
+             $data = $this->analyticsService->dashboadWallet();
             if (isset($data['error'])) {
                 return $this->apiResource->error($data['error'], 400);
             }

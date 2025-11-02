@@ -21,9 +21,9 @@ class HasAccountMiddleware
             $account_list = $account->getAccountList();
             $accounts     = $account_list["accounts"];
             if (! $accounts || count($accounts) < 1) {
-                abort(404, (string) $accounts);
+                // abort(404, (string) $accounts);
 
-                // abort(404, "Register an account first");
+                abort(404, "Register an account first");
             }
             if (count($account_list['accounts']) >= 1) {
                 return $next($request);

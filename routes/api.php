@@ -115,12 +115,12 @@ Route::prefix('v1')->group(function () {
     Route::post('/email/resend', [VerificationController::class, 'resend'])->middleware('auth:sanctum')->name('verification.resend');
 
     Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/auth/user/data', [HomeController::class, 'user']);
 
         // generate login token for retailers
         Route::post('/login/generate-token', [UserController::class, 'generateLoginToken']);
 
         Route::post('/logout', [AuthenticatedSessionController::class, 'logout'])->name('user.logout');
-        Route::get('/auth/user', [HomeController::class, 'user']);
 
         // Social Authentication Routes (Protected)
         Route::post('/auth/{provider}/link', [SocialAuthController::class, 'linkSocialAccount']);
@@ -393,6 +393,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/jobs/{job}/apply', [JobController::class, 'apply']);
         Route::get('/jobs/{job}/applications', [JobController::class, 'getApplications']);
         Route::put('/jobs/applications/{application}/status', [JobController::class, 'updateApplicationStatus']);
+        Route::post('/jobs/applications/{application}/select-interview-date', [JobController::class, 'selectInterviewDate']);
         Route::get('/my-job-applications', [JobController::class, 'myApplications']);
 
         // /vendors/456/ecommerce/products   ecommerce-vendor-middleware
